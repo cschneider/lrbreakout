@@ -2,7 +2,8 @@
 
  ![lrbreakout](lrbreakout-320.png)
  
- Greenfield rewrite of lbreakout by lgames in pure java. 
+Greenfield rewrite of lbreakout by lgames in pure java. 
+My second java game written in 2006. Compared to java tetris I used many advanced features like animations and sound. Still the code of the game is very small and clean. In fact the complete game is only 600kb compared to 3MB for lbreaktout2.
 
 ## Build
 
