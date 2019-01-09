@@ -20,7 +20,7 @@ import javax.swing.JFrame;
 
 public class Breakout extends JFrame implements WindowListener {
 	private static final long serialVersionUID = -6966108542815061092L;
-	private static final boolean FULLSCREEN = true;
+	private static final boolean FULLSCREEN = false;
 	private static int DEFAULT_FPS = 60;
 	private BreakoutPanel bp;
 

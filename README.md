@@ -1,6 +1,8 @@
 # Liquid Reality Breakout
 
-Greenfield rewrite in java of lbreakout by lgames. 
+ ![lrbreakout](lrbreakout-320.png)
+ 
+ Greenfield rewrite of lbreakout by lgames in pure java. 
 
 ## Build
 
