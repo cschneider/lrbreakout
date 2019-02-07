@@ -1,5 +1,7 @@
 package breakout;
 
+import static java.util.stream.Collectors.toSet;
+
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
@@ -14,8 +16,10 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import breakout.constants.BallMode;
@@ -90,7 +94,7 @@ public class BreakoutGame {
 		
 		paddle = new Paddle();
 		paddle.setPosY(sizeY - paddle.getSizeY() - 30);
-		msgFont = new Font("SansSerif", Font.BOLD, 18);
+		msgFont = new Font("SansSerif", Font.BOLD, 12);
 		gameOver = false;
 		running = true;
 		
@@ -144,9 +148,7 @@ public class BreakoutGame {
 	}
 	
 	void resetEffects() {
-		for (TimedEvent event : eventMap.values()) {
-			event.deActivate();
-		}
+	    eventMap.values().forEach(TimedEvent::deActivate);
 		brickLayer.destroyLowerWall();
 		ballSpeed = DEFAULT_BALL_SPEED;
 		setBallMode(BallMode.Normal);
@@ -158,9 +160,7 @@ public class BreakoutGame {
 	
 	public void setBallSpeed(int ballSpeed) {
 		this.ballSpeed = Math.max(MIN_BALL_SPEED, Math.min(ballSpeed, MAX_BALL_SPEED));
-		for (Ball ball : ballList) {
-			ball.setSpeed(this.ballSpeed);
-		}
+		ballList.forEach(ball -> ball.setSpeed(this.ballSpeed));
 	}
 	
 	void nextLevel() {
@@ -180,11 +180,10 @@ public class BreakoutGame {
 			posX = sizeX - paddle.getSizeX();
 		}
 		paddle.setPosX(posX);
-		for (Ball ball : ballList) {
-			if (ball.isStickToPaddle()) {
-				ball.setPosX(ball.getPosX() + posX - oldPosX);
-			}
-		}
+		double moveX = posX - oldPosX;
+		ballList.stream()
+		    .filter(Ball::isStickToPaddle)
+		    .forEach(ball -> ball.moveX(moveX));
 	}
 	
 	public void checkWalls(Ball ball) {
@@ -253,6 +252,7 @@ public class BreakoutGame {
 				case ExplosiveBall:
 				case EnergyBall:
 				case WeakBall: eventType = ExtraType.EnergyBall; break;
+				default: break;
 			}
 			eventMap.get(eventType).setupEvent(extra.getType().getTimeOut());
 		}
@@ -285,31 +285,26 @@ public class BreakoutGame {
 			case Chaos: break;
 			case GhostPaddle: break;
 			case Reset: resetEffects(); break;
-			case Time: // Add ADD_SECONDS seconds to all active events
-				for (TimedEvent event : eventMap.values()) {
-					if (event.isActive()) {
-						event.setupEvent(ADD_SECONDS);
-					}
-				}
-				break;
+			case Time: prolongEvents(); break;
 			case ExplosiveBall: setBallMode(BallMode.Explosive); break;
 			case AttractBonus: break;
 			case AttractMalus: break;
 			case WeakBall: setBallMode(BallMode.Weak); break;
-			/*
-			case TimeSpinRight: break;
-			case TimeSpinLeft: break;
-			case Strange: break;
-			*/
+			default: break;
 		}
 		extra.setDeleted(true);
 		SoundPlayer.playSound(Sound.Click);
 	}
+
+	// Add ADD_SECONDS seconds to all active events
+    private void prolongEvents() {
+        eventMap.values().stream()
+            .filter(TimedEvent::isActive)
+            .forEach(event -> event.setupEvent(ADD_SECONDS));
+    }
 	
 	public void releaseStickyBalls() {
-		for (Ball ball : ballList) {
-			ball.setStickToPaddle(false);
-		}
+	    ballList.stream().forEach(ball -> ball.setStickToPaddle(false));
 	}
 
 	public void handleMouseEvent(MouseEvent e) {
@@ -371,16 +366,11 @@ public class BreakoutGame {
 		}
 	}
 
-	// Delete all sprites that are marked for deletion
-	public void deleteMarked(List<? extends Sprite> spriteList) {
-		for (int c = 0; c < spriteList.size(); c++) {
-			Sprite sprite = spriteList.get(c);
-			if (sprite.isDeleted()) {
-				spriteList.remove(sprite);
-				c--;
-			}
-		}
-	}
+    // Delete all sprites that are marked for deletion
+    public void deleteMarked(List<? extends Sprite> spriteList) {
+        Set<? extends Sprite> toRemove = spriteList.stream().filter(Sprite::isDeleted).collect(toSet());
+        spriteList.removeAll(toRemove);
+    }
 
 	void gameUpdate() {
 		while (!mouseEvents.isEmpty()) {
@@ -391,93 +381,108 @@ public class BreakoutGame {
 			KeyEvent ke = keyEvents.poll();
 			handleKeyEvent(ke);
 		}
-		if (!paused && !gameOver) {
-			// Generate ball if necessary
-			if (generateBall) {
-				//BallMode ballMode = BallMode.values()[new Random().nextInt(BallMode.values().length)]; 
-				doGenerateBall(ballMode, eventMap.get(ExtraType.Sticky).isActive());
-			}
-
-			// Move balls
-			for (int c=0; c<ballList.size(); c++) {
-				Ball ball = ballList.get(c); // Do not use iterator to avoid conc mod execption
-				int aScore = brickLayer.checkBricks(ball);
-				if (aScore>0) {
-					addScore(aScore);
-				}
-				if (paddle.checkPaddle(ball) && paddle.getPaddleMode() == PaddleMode.Sticky) {
-					ball.setStickToPaddle(true);
-				}
-				checkWalls(ball);
-				ball.move();
-			}
-			
-			// Move extras
-			for (Extra extra : extraList) {
-				checkWalls(extra);
-				if (paddle.checkExtraHit(extra)) {
-					handleExtraHit(extra);
-				}
-				boolean attract = (extra.getType().isBonus() && eventMap.get(ExtraType.AttractBonus).isActive())
-					|| (!extra.getType().isBonus() && eventMap.get(ExtraType.AttractMalus).isActive());
-				extra.move(paddle.getPosX(), attract);
-			}
-			
-			// Move sprites
-			for (int c=0; c<spriteList.size(); c++) {
-				Sprite sprite = spriteList.get(c);
-				sprite.move();
-				if (sprite instanceof Bullet) {
-					int score = brickLayer.checkBricks((Bullet)sprite);
-					if (score>0) {
-						addScore(score);
-						sprite.setDeleted(true);
-					}
-				}
-				
-			}
-
-			deleteMarked(ballList);
-			deleteMarked(extraList);
-			deleteMarked(spriteList);
-			
-			// Last ball out => loose a life
-			if (ballList.size() == 0) {
-				SoundPlayer.playSound(Sound.LooseLife);
-				lives--;
-				if (lives <= 0) {
-					SoundPlayer.playSound(Sound.GameOver);
-					gameOver = true;
-				} else {
-					resetEffects();
-					doGenerateBall(BallMode.Normal, true);
-				}
-			}
-			
-			// Check, wich events run out
-			for (ExtraType extraType : ExtraType.values()) {
-				TimedEvent event = eventMap.get(extraType);
-				if (event.checkTriggered()) {
-					switch (extraType) {
-						case EnergyBall: setBallMode(BallMode.Normal); break;
-						case Freeze: paddle.setPaddleMode(PaddleMode.Normal); break;
-						case Wall: brickLayer.destroyLowerWall(); break;
-						case Weapon: paddle.setWeapon(false); break;
-						case Sticky: 
-							paddle.setPaddleMode(PaddleMode.Normal);
-							releaseStickyBalls();
-							break;
-					}
-				}
-			}
-				
-			// Check if all bricks have been hit
-			int numBricks = brickLayer.countBricks();
-			if (numBricks == 0) {
-				nextLevel();
-			}
+		if (paused || gameOver) {
+		    return;
 		}
+		
+        // Generate ball if necessary
+        if (generateBall) {
+            // BallMode ballMode = BallMode.values()[new
+            // Random().nextInt(BallMode.values().length)];
+            doGenerateBall(ballMode, eventMap.get(ExtraType.Sticky).isActive());
+        }
+
+        ballList.forEach(this::moveBall);
+        extraList.forEach(this::moveExtra);
+        spriteList.stream().peek(Sprite::move).filter(Bullet.class::isInstance).map(sprite -> (Bullet) sprite)
+                .forEach(this::handleBullet);
+
+        deleteMarked(ballList);
+        deleteMarked(extraList);
+        deleteMarked(spriteList);
+
+        // Last ball out => loose a life
+        if (ballList.size() == 0) {
+            SoundPlayer.playSound(Sound.LooseLife);
+            lives--;
+            if (lives <= 0) {
+                SoundPlayer.playSound(Sound.GameOver);
+                gameOver = true;
+            } else {
+                resetEffects();
+                doGenerateBall(BallMode.Normal, true);
+            }
+        }
+
+        timeoutEvents();
+
+        // Check if all bricks have been hit
+        int numBricks = brickLayer.countBricks();
+        if (numBricks == 0) {
+            nextLevel();
+        }
+
 	}
+
+    private void moveBall(Ball ball) {
+        int aScore = brickLayer.checkBricks(ball);
+        if (aScore>0) {
+        	addScore(aScore);
+        }
+        if (paddle.checkPaddle(ball) && paddle.getPaddleMode() == PaddleMode.Sticky) {
+        	ball.setStickToPaddle(true);
+        }
+        checkWalls(ball);
+        ball.move();
+    }
+
+    private void moveExtra(Extra extra) {
+        checkWalls(extra);
+        if (paddle.checkExtraHit(extra)) {
+        	handleExtraHit(extra);
+        }
+        boolean attract = (extra.getType().isBonus() && eventMap.get(ExtraType.AttractBonus).isActive())
+        	|| (!extra.getType().isBonus() && eventMap.get(ExtraType.AttractMalus).isActive());
+        extra.move(paddle.getPosX(), attract);
+    }
+
+    private void handleBullet(Bullet sprite) {
+        int score = brickLayer.checkBricks(sprite);
+        if (score > 0) {
+            addScore(score);
+            sprite.setDeleted(true);
+        }
+    }
+
+    private void timeoutEvents() {
+        eventMap.entrySet().stream()
+            .filter(entry -> entry.getValue().checkTriggered())
+            .map(Entry::getKey)
+            .forEach(this::timeoutEvent);
+    }
+
+    private void timeoutEvent(ExtraType extraType) {
+        switch (extraType) {
+        case EnergyBall:
+            setBallMode(BallMode.Normal);
+            break;
+        case Freeze:
+            paddle.setPaddleMode(PaddleMode.Normal);
+            break;
+        case Wall:
+            brickLayer.destroyLowerWall();
+            break;
+        case Weapon:
+            paddle.setWeapon(false);
+            break;
+        case Sticky:
+            paddle.setPaddleMode(PaddleMode.Normal);
+            releaseStickyBalls();
+            break;
+        default:
+            break;
+        }
+    }
 		
 	public String getStatusLine() {
 		StringBuilder statusLine = new StringBuilder();
@@ -532,19 +537,13 @@ public class BreakoutGame {
 			tile(g, backgroundImAr[imNum], sizeX, sizeY); // draw backgorund image
 			brickLayer.draw(g);
 		}
-		for (Ball ball : ballList) {
-			ball.draw(g);
-		}
-		for (Extra extra : extraList) {
-			extra.draw(g);
-		}
-		for (Sprite sprite : spriteList) {
-			sprite.draw(g);
-		}
+		ballList.forEach(ball -> ball.draw(g));
+		extraList.forEach(extra -> extra.draw(g));
+		spriteList.forEach(sprite -> sprite.draw(g));
 		paddle.draw(g);
 		g.setFont(msgFont);
 		g.setColor(Color.red);
-		//g.drawString("Fps: " + fps, 20, 20);
+		g.drawString("Fps: " + fps, 20, 20);
 		frameCount ++;
 		if (System.nanoTime()-frameCountStartTime>1000000000L) {
 			frameCountStartTime = System.nanoTime();

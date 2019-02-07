@@ -87,6 +87,10 @@ public class Sprite {
 	public void setPosX(double posX) {
 		this.posX = posX;
 	}
+	
+	public void moveX(double moveX) {
+	    this.posX = this.posX + moveX;
+	}
 
 	public double getPosY() {
 		return posY;
