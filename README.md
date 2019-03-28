@@ -1,5 +1,7 @@
 # Liquid Reality Breakout
 
+[![Build Status](https://travis-ci.com/cschneider/lrbreakout.svg?branch=master)](https://travis-ci.com/cschneider/lrbreakout)
+
  ![lrbreakout](lrbreakout-320.png)
  
 Greenfield rewrite of lbreakout by lgames in pure java. 
